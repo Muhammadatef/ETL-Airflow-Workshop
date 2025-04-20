@@ -1,0 +1,87 @@
+[2025-04-16 07:44:52,009] {taskinstance.py:896} INFO - Dependencies all met for <TaskInstance: sales_dwh_etl.create_oltp_schema 2025-04-15T07:03:53.119928+00:00 [queued]>
+[2025-04-16 07:44:52,026] {taskinstance.py:896} INFO - Dependencies all met for <TaskInstance: sales_dwh_etl.create_oltp_schema 2025-04-15T07:03:53.119928+00:00 [queued]>
+[2025-04-16 07:44:52,026] {taskinstance.py:1087} INFO - 
+--------------------------------------------------------------------------------
+[2025-04-16 07:44:52,026] {taskinstance.py:1088} INFO - Starting attempt 2 of 2
+[2025-04-16 07:44:52,026] {taskinstance.py:1089} INFO - 
+--------------------------------------------------------------------------------
+[2025-04-16 07:44:52,036] {taskinstance.py:1107} INFO - Executing <Task(PostgresOperator): create_oltp_schema> on 2025-04-15T07:03:53.119928+00:00
+[2025-04-16 07:44:52,042] {standard_task_runner.py:52} INFO - Started process 807 to run task
+[2025-04-16 07:44:52,046] {standard_task_runner.py:76} INFO - Running: ['***', 'tasks', 'run', 'sales_dwh_etl', 'create_oltp_schema', '2025-04-15T07:03:53.119928+00:00', '--job-id', '7', '--pool', 'default_pool', '--raw', '--subdir', 'DAGS_FOLDER/sales_dwh_etl.py', '--cfg-path', '/tmp/tmpcpvu6w59', '--error-file', '/tmp/tmprapa17ik']
+[2025-04-16 07:44:52,049] {standard_task_runner.py:77} INFO - Job 7: Subtask create_oltp_schema
+[2025-04-16 07:44:52,100] {logging_mixin.py:104} INFO - Running <TaskInstance: sales_dwh_etl.create_oltp_schema 2025-04-15T07:03:53.119928+00:00 [running]> on host abb4dd3b2fe1
+[2025-04-16 07:44:52,161] {taskinstance.py:1302} INFO - Exporting the following env vars:
+AIRFLOW_CTX_DAG_OWNER=***
+AIRFLOW_CTX_DAG_ID=sales_dwh_etl
+AIRFLOW_CTX_TASK_ID=create_oltp_schema
+AIRFLOW_CTX_EXECUTION_DATE=2025-04-15T07:03:53.119928+00:00
+AIRFLOW_CTX_DAG_RUN_ID=scheduled__2025-04-15T07:03:53.119928+00:00
+[2025-04-16 07:44:52,163] {postgres.py:68} INFO - Executing: 
+    -- Create schema if not exists
+    CREATE SCHEMA IF NOT EXISTS sales;
+    
+    -- Create tables if they don't exist
+    CREATE TABLE IF NOT EXISTS sales.customers (
+        customer_id SERIAL PRIMARY KEY,
+        customer_name VARCHAR(100) NOT NULL,
+        email VARCHAR(100),
+        phone VARCHAR(20),
+        address TEXT,
+        city VARCHAR(50),
+        state VARCHAR(50),
+        country VARCHAR(50),
+        postal_code VARCHAR(20),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    
+    CREATE TABLE IF NOT EXISTS sales.products (
+        product_id SERIAL PRIMARY KEY,
+        product_name VARCHAR(100) NOT NULL,
+        category VARCHAR(50),
+        subcategory VARCHAR(50),
+        price DECIMAL(10, 2) NOT NULL,
+        cost DECIMAL(10, 2),
+        supplier_id INTEGER,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    
+    CREATE TABLE IF NOT EXISTS sales.orders (
+        order_id SERIAL PRIMARY KEY,
+        customer_id INTEGER REFERENCES sales.customers(customer_id),
+        order_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        status VARCHAR(20) DEFAULT 'pending',
+        shipping_method VARCHAR(50),
+        shipping_cost DECIMAL(10, 2),
+        total_amount DECIMAL(10, 2)
+    );
+    
+    CREATE TABLE IF NOT EXISTS sales.order_items (
+        order_item_id SERIAL PRIMARY KEY,
+        order_id INTEGER REFERENCES sales.orders(order_id),
+        product_id INTEGER REFERENCES sales.products(product_id),
+        quantity INTEGER NOT NULL,
+        unit_price DECIMAL(10, 2) NOT NULL,
+        discount DECIMAL(5, 2) DEFAULT 0
+    );
+    
+[2025-04-16 07:44:52,182] {taskinstance.py:1501} ERROR - Task failed with exception
+Traceback (most recent call last):
+  File "/home/airflow/.local/lib/python3.6/site-packages/airflow/models/taskinstance.py", line 1157, in _run_raw_task
+    self._prepare_and_execute_task_with_callbacks(context, task)
+  File "/home/airflow/.local/lib/python3.6/site-packages/airflow/models/taskinstance.py", line 1331, in _prepare_and_execute_task_with_callbacks
+    result = self._execute_task(context, task_copy)
+  File "/home/airflow/.local/lib/python3.6/site-packages/airflow/models/taskinstance.py", line 1361, in _execute_task
+    result = task_copy.execute(context=context)
+  File "/home/airflow/.local/lib/python3.6/site-packages/airflow/providers/postgres/operators/postgres.py", line 70, in execute
+    self.hook.run(self.sql, self.autocommit, parameters=self.parameters)
+  File "/home/airflow/.local/lib/python3.6/site-packages/airflow/hooks/dbapi.py", line 177, in run
+    with closing(self.get_conn()) as conn:
+  File "/home/airflow/.local/lib/python3.6/site-packages/airflow/providers/postgres/hooks/postgres.py", line 88, in get_conn
+    conn = deepcopy(self.connection or self.get_connection(conn_id))
+  File "/home/airflow/.local/lib/python3.6/site-packages/airflow/hooks/base.py", line 67, in get_connection
+    conn = Connection.get_connection_from_secrets(conn_id)
+  File "/home/airflow/.local/lib/python3.6/site-packages/airflow/models/connection.py", line 379, in get_connection_from_secrets
+    raise AirflowNotFoundException(f"The conn_id `{conn_id}` isn't defined")
+airflow.exceptions.AirflowNotFoundException: The conn_id `postgres_conn` isn't defined
+[2025-04-16 07:44:52,185] {taskinstance.py:1551} INFO - Marking task as FAILED. dag_id=sales_dwh_etl, task_id=create_oltp_schema, execution_date=20250415T070353, start_date=20250416T074452, end_date=20250416T074452
+[2025-04-16 07:44:52,216] {local_task_job.py:149} INFO - Task exited with return code 1

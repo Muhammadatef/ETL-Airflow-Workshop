@@ -1,0 +1,19 @@
+docker exec -it scenario2-airflow-webserver-1 python /opt/airflow/dags/airflow_connections_setup.py
+
+
+docker exec -it scenario2-airflow-webserver-1 airflow connections get postgres_conn
+
+
+
+
+docker exec -it postgres ps aux | grep postgres
+docker exec -it postgres psql -U postgres -d mydatabase -p 5431
+docker exec -it postgres netstat -tuln
+
+
+
+python -m venv venv
+
+# Activate the virtual environment
+source venv/bin/activate
+

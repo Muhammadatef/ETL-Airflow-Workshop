@@ -1,0 +1,18 @@
+# requirements.txt
+apache-airflow==2.7.3
+pyspark==3.2.0
+apache-airflow-providers-apache-spark==4.1.0
+apache-airflow-providers-apache-hdfs==4.1.0
+apache-airflow-providers-postgres==5.10.0
+apache-airflow-providers-apache-hive==4.2.0
+sqlalchemy
+psycopg2-binary
+trino>=0.305.0
+pandas
+numpy
+pyarrow>=4.0.0,<10.0.0
+fastavro
+boto3
+requests
+python-dotenv
+apache-airflow-providers-openlineage>=1.8.0

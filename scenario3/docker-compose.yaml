@@ -1,0 +1,228 @@
+version: '3.8'
+
+services:
+  namenode:
+    image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
+    hostname: scenario3-namenode-1
+    ports:
+      - "9870:9870"
+      - "8020:8020"
+    environment:
+      - CLUSTER_NAME=test
+    volumes:
+      - namenode_data:/hadoop/dfs/name
+      - ./hive-config/core-site.xml:/etc/hadoop/core-site.xml
+    networks:
+      - scenario3_default
+
+  datanode:
+    image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+    depends_on:
+      - namenode
+    environment:
+      - CORE_CONF_fs_defaultFS=hdfs://scenario3-namenode-1:8020
+    volumes:
+      - ./hive-config/core-site.xml:/etc/hadoop/core-site.xml
+    networks:
+      - scenario3_default
+
+  hive-server:
+    image: bde2020/hive:2.3.2-postgresql-metastore
+    depends_on:
+      - namenode
+      - datanode
+    ports:
+      - "10000:10000"
+    environment:
+      - HIVE_CORE_CONF_javax_jdo_option_ConnectionURL=jdbc:postgresql://hive-metastore-postgresql:5432/metastore
+      - SERVICE_NAME=hiveserver2
+    volumes:
+      - ./hive-config/hive-site.xml:/opt/hive/conf/hive-site.xml
+      - ./hive-config/core-site.xml:/etc/hadoop/core-site.xml
+      - ./hive-config/hdfs-site.xml:/etc/hadoop/hdfs-site.xml
+    networks:
+      - scenario3_default
+
+  hive-metastore:
+    image: bde2020/hive:2.3.2-postgresql-metastore
+    depends_on:
+      - hive-metastore-postgresql
+    environment:
+      - SERVICE_NAME=metastore
+      - HIVE_CORE_CONF_javax_jdo_option_ConnectionURL=jdbc:postgresql://hive-metastore-postgresql:5432/metastore
+    volumes:
+      - ./hive-config/hive-site.xml:/opt/hive/conf/hive-site.xml
+      - ./hive-config/core-site.xml:/etc/hadoop/core-site.xml
+      - ./hive-config/hdfs-site.xml:/etc/hadoop/hdfs-site.xml
+    networks:
+      - scenario3_default
+
+  hive-metastore-postgresql:
+    image: bde2020/hive-metastore-postgresql:2.3.0
+    container_name: scenario3-hive-metastore-postgresql-1
+    environment:
+      - POSTGRES_USER=hive
+      - POSTGRES_PASSWORD=hive
+      - POSTGRES_DB=metastore
+    ports:
+      - "5433:5432"
+    volumes:
+      - hive_metastore_postgres_data:/var/lib/postgresql/data
+    networks:
+      - scenario3_default
+
+  spark-master:
+    image: bde2020/spark-master:3.2.0-hadoop3.2
+    ports:
+      - "8082:8080"
+      - "7077:7077"
+    environment:
+      - CORE_CONF_fs_defaultFS=hdfs://scenario3-namenode-1:8020
+    volumes:
+      - ./spark:/spark-scripts
+      - ./hive-config/core-site.xml:/etc/hadoop/core-site.xml
+      - ./hive-config/hdfs-site.xml:/etc/hadoop/hdfs-site.xml
+      - ./hive-config/hive-site.xml:/opt/spark/conf/hive-site.xml
+      - ./spark-libs/postgresql-42.7.3.jar:/opt/spark/jars/postgresql-42.7.3.jar
+    networks:
+      - scenario3_default
+
+  spark-worker:
+    image: bde2020/spark-worker:3.2.0-hadoop3.2
+    depends_on:
+      - spark-master
+    environment:
+      - SPARK_MASTER=spark://spark-master:7077
+      - CORE_CONF_fs_defaultFS=hdfs://scenario3-namenode-1:8020
+    volumes:
+      - ./hive-config/core-site.xml:/etc/hadoop/core-site.xml
+      - ./hive-config/hive-site.xml:/opt/spark/conf/hive-site.xml
+      - ./spark-libs/postgresql-42.7.3.jar:/opt/spark/jars/postgresql-42.7.3.jar
+    networks:
+      - scenario3_default
+
+  trino-coordinator:
+    image: trinodb/trino:459
+    ports:
+      - "8081:8060"
+    volumes:
+      - ./trino-config:/etc/trino
+      - ./hive-config/core-site.xml:/etc/hadoop/core-site.xml
+    command: >
+      bash -c "/usr/lib/trino/bin/launcher run --etc-dir /etc/trino"
+    networks:
+      - scenario3_default
+
+  postgres:
+    image: postgres:13
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U airflow"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  airflow-webserver:
+    build:
+      context: .
+      dockerfile: Dockerfile.airflow
+    user: "${AIRFLOW_UID}:0"
+    group_add:
+      - 999  # Replace with actual docker group GID if different
+    depends_on:
+      postgres:
+        condition: service_healthy
+      spark-master:
+        condition: service_started
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__WEBSERVER__SECRET_KEY: "your-secure-secret-key-12345"
+      _PIP_ADDITIONAL_REQUIREMENTS: >-
+        apache-airflow-providers-apache-spark==4.1.0
+        apache-airflow-providers-openlineage>=1.8.0
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./spark:/spark-scripts
+      - ./airflow.cfg:/opt/airflow/airflow.cfg
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - "8055:8080"
+    command: webserver
+
+  airflow-scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile.airflow
+    user: "${AIRFLOW_UID}:0"
+    group_add:
+      - 999
+    depends_on:
+      postgres:
+        condition: service_healthy
+      spark-master:
+        condition: service_started
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__WEBSERVER__SECRET_KEY: "your-secure-secret-key-12345"
+      _PIP_ADDITIONAL_REQUIREMENTS: >-
+        apache-airflow-providers-apache-spark==4.1.0
+        apache-airflow-providers-openlineage>=1.8.0
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./spark:/spark-scripts
+      - ./airflow.cfg:/opt/airflow/airflow.cfg
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: scheduler
+
+  airflow-init:
+    build:
+      context: .
+      dockerfile: Dockerfile.airflow
+    user: "${AIRFLOW_UID}:0"
+    group_add:
+      - 999
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
+      _AIRFLOW_DB_UPGRADE: 'true'
+      _AIRFLOW_WWW_USER_CREATE: 'true'
+      _AIRFLOW_WWW_USER_USERNAME: airflow
+      _AIRFLOW_WWW_USER_PASSWORD: airflow
+      AIRFLOW__WEBSERVER__SECRET_KEY: "your-secure-secret-key-12345"
+      _PIP_ADDITIONAL_REQUIREMENTS: >-
+        apache-airflow-providers-apache-spark==4.1.0
+        apache-airflow-providers-openlineage>=1.8.0
+    command: ["bash", "-c", "airflow db init"]
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./airflow.cfg:/opt/airflow/airflow.cfg
+      - /var/run/docker.sock:/var/run/docker.sock
+
+volumes:
+  namenode_data:
+  postgres_data:
+  hive_metastore_postgres_data:  # Add this volume
+  trino_data:
+
+networks:
+  scenario3_default:
+    driver: bridge
+
+
+
+
+    

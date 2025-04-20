@@ -1,0 +1,39 @@
+FROM apache/airflow:2.7.2
+
+USER root
+
+# Install all required system dependencies
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        openjdk-11-jre-headless \
+        python3-dev \
+        libsasl2-dev \
+        libsasl2-modules-gssapi-mit \
+        gcc \
+        g++ \
+        libssl-dev \
+        libffi-dev \
+        make \
+        krb5-user && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+USER airflow
+
+# Install packages in optimal order with explicit versions
+RUN pip install --upgrade pip && \
+    pip install --no-cache-dir \
+        psycopg2-binary \
+        apache-airflow-providers-apache-spark==4.1.0 \
+        apache-airflow-providers-apache-hive==6.1.0 \
+        trino \
+        pandas \
+        numpy \
+        thrift==0.16.0 && \
+    # Install SASL from pre-built wheel
+    pip install --no-cache-dir \
+        sasl==0.3.1 --no-binary :all: && \
+    # Finally install PyHive
+    pip install --no-cache-dir pyhive[hive]
+
+COPY --chown=airflow:root airflow.cfg ${AIRFLOW_HOME}/airflow.cfg
